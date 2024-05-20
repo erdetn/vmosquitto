@@ -1,3 +1,5 @@
+// Author: erdetn //
+
 module vmosquitto
 
 #flag -l mosquitto
@@ -138,8 +140,15 @@ fn cleanup() {
 	_ := C.mosquitto_lib_cleanup()
 }
 
+pub const no_id = ''
+
 fn C.mosquitto_new(id &char, clean_session bool, obj voidptr) &C.mosquitto
 pub fn new(id string, clean_session bool) &Mosquitto {
+	if id == no_id {
+		return unsafe {
+			&Mosquitto(C.mosquitto_new(&char(nil), clean_session, nil))
+		}
+	}
 	return unsafe {
 		&Mosquitto(C.mosquitto_new(id.str, clean_session, nil))
 	}
@@ -256,11 +265,21 @@ pub fn (m &Mosquitto) publish(topic string, payload string, qos QoS, retain bool
 // TODO
 fn C.mosquitto_publish_v5(mq &C.mosquitto, mid &int, topic &char, payloadlen int, payload voidptr, qos int, retain bool, mp &C.mosquitto_property) int
 
+pub struct Topic {
+pub:
+	topic string 
+	qos QoS
+}
+
+pub fn (t Topic)str() string {
+	return '{ ${t.topic}, ${t.qos} }'
+}
+
 fn C.mosquitto_subscribe(mq &C.mosquitto, mid &int, sub &char, qos int) int
-pub fn (m &Mosquitto) subscribe(topics []string, qos QoS) ReturnStatus {
-	for topic in topics {
+pub fn (m &Mosquitto) subscribe(topics []Topic) ReturnStatus {
+	for t in topics {
 		unsafe {
-			rc := ReturnStatus(C.mosquitto_subscribe(m, nil, topic.str, int(qos)))
+			rc := ReturnStatus(C.mosquitto_subscribe(m, nil, t.topic.str, int(t.qos)))
 			if rc != .ok {
 				return rc
 			}
@@ -401,7 +420,7 @@ pub fn (m &Mosquitto)on_publish(callback fn(&Mosquitto, voidptr, int)) {
 }
 
 fn C.mosquitto_subscribe_callback_set(mq &C.mosquitto, cb fn(mq &Mosquitto, obj voidptr, mid int, qos_count int, granted_qos &int))
-pub fn (m &Mosquitto)on_subscribe(mq &Mosquitto, callback fn(mq &Mosquitto, obj voidptr, mid int, qos_count int, granted_qos &int)) {
+pub fn (m &Mosquitto)on_subscribe(callback fn(mq &Mosquitto, obj voidptr, mid int, qos_count int, granted_qos &int)) {
 	C.mosquitto_subscribe_callback_set(m, callback)
 }
 
@@ -416,7 +435,7 @@ fn (m &Mosquitto)on_log(callback fn(m &Mosquitto, obj voidptr, level Log, log_st
 }
 
 fn C.mosquitto_message_callback_set(m &C.mosquitto, cb fn(&Mosquitto, voidptr, &Message))
-pub fn (m &Mosquitto)on_message(callback fn(&Mosquitto, voidptr, &Message)) {
+pub fn (m &Mosquitto)on_message(callback fn(mq &Mosquitto, obj voidptr, msg &Message)) {
 	C.mosquitto_message_callback_set(m, callback)
 }
 
@@ -443,6 +462,16 @@ fn C.mosquitto_message_free_contents(msg &C.mosquitto_message)
 pub fn (msg &Message) clear() {
 	C.mosquitto_message_free_contents(msg)
 }
+
+pub fn (msg &Message)str() string {
+	mid := msg.mid() 
+	topic := msg.topic()
+	payload := msg.payload().bytestr()
+	qos := msg.qos()
+	retain := msg.retain()
+	return '{${mid}, ${topic}, ${payload}, ${qos}, ${retain}}'
+}
+
 
 pub fn (msg Message) qos() int {
 	return msg.qos
