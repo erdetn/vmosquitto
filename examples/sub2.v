@@ -17,13 +17,14 @@ fn on_sub(mq &vmq.Mosquitto, bj voidptr, mid int, qos_count int, granted_qos &in
 }
 
 fn on_msg(mq &vmq.Mosquitto, obj voidptr, msg &vmq.Message) {
-	mut rx := &vmq.Message{}
-	if msg.copy(rx) == .ok {
-		println('on_sub: rx=${msg.str()}')
-	} else {
-		println('on_sub: msg=${msg.str()}')
+	println('on_sub: ${msg.str()}')
+}
+
+fn on_log(m &vmq.Mosquitto, obj voidptr, level vmq.Log, log_str &char) {
+	unsafe {
+		log := log_str.vstring()
+		println('${level}: ${log}')
 	}
-	rx.clear()
 }
 
 fn main() {
@@ -33,6 +34,7 @@ fn main() {
 	client.on_connect(on_connect)
 	client.on_subscribe(on_sub)
 	client.on_message(on_msg)
+	client.on_log(on_log)
 
 	if client.connect('127.0.0.1', 1883, 1000, vmq.no_bind_addr, false) != .ok {
 		println('failed to connect')
@@ -41,6 +43,27 @@ fn main() {
 	}
 	defer {
 		client.disconnect()
+	}
+
+	if client.will_set('sub1/will', 'I am gone', .qos1, true) != .ok {
+		println('Failed to `will_set`')
+	}
+	if client.will_clear() == .ok {
+		if client.will_set('sub1/will', '2nd notification', .qos1, true) != .ok {
+			println('Failed to set the 2nd `will_set`')
+		}
+	} else {
+		println('Failed to revoke (clear) will message.')
+	}
+
+	if client.set_account('erdetn', '1234') != .ok {
+		println('Failed to set account')
+	}
+
+	if client.connect('127.0.0.1', 1883, 1000, vmq.no_bind_addr, false) != .ok {
+		println('failed to connect')
+		client.destroy()
+		return
 	}
 
 	mut topics := []vmq.Topic{}
